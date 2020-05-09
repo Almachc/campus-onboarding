@@ -1,32 +1,70 @@
 require 'json'
 require_relative 'api'
+require 'terminal-table'
 
-def choose_a_state
-  states = Api.get_states_from_brazil
-  puts ''
-  puts 'ESTADOS DO BRASIL:'
-  puts ''
-  states.each {|state| puts "Estado: #{state[:nome]} | Sigla: #{state[:sigla]}"}
-  puts ''
-  print 'Digite a sigla do estado desejado: '
+def choose_names
+  print 'Digite um ou mais nomes, separados por vírgula, a serem pesquisados: '
   gets().chomp
 end
 
-def generate_rankings(state_id)
-  ranking_geral = Api.get_ranking_of_names_by(location_id: state_id)
-  ranking_masc = Api.get_ranking_of_names_by(location_id: state_id, gender: 'M')
-  ranking_fem = Api.get_ranking_of_names_by(location_id: state_id, gender: 'F')
+def choose_a_city
+  print 'Digite corretamente o nome da cidade desejada: '
+  city_name = gets().chomp
+  Api.convert_name_city_to_id(city_name)
+end
 
-  puts ''
-  puts 'Ranking Geral'
-  ranking_geral[:res].each {|item| puts "#{item[:ranking]} - #{item[:nome]}"}
-  puts ''
-  puts 'Ranking Masculino'
-  ranking_masc[:res].each {|item| puts "#{item[:ranking]} - #{item[:nome]}"}
-  puts ''
-  puts 'Ranking Feminino'
-  ranking_fem[:res].each {|item| puts "#{item[:ranking]} - #{item[:nome]}"}
-  puts ''
+def choose_a_state
+  states = Api.get_states_from_brazil
+  rows = Array.new(states.length) {[]}
+  states.each_with_index {|state, index| 
+    rows[index] << state[:nome]
+    rows[index] << state[:sigla]
+  }
+  puts Terminal::Table.new :title => 'Estados', :headings => ['Nome', 'Sigla'], :rows => rows
+  print 'Digite a sigla correspondente ao estado desejado: '
+  gets().chomp
+end
+
+def generate_name_frequency_table(names)
+  name_frequency = Api.get_name_frequency(names)
+
+  heading = ['Década']
+  rows = Array.new(name_frequency[0][:res].length) {[]}
+
+  name_frequency.each_with_index {|item1, index1|
+    heading << item1[:nome]
+    item1[:res].each_with_index {|item2, index2|
+      if index1 == 0
+        rows[index2] << item2[:periodo].delete('[')
+      end
+      rows[index2] << item2[:frequencia]
+    }
+  }
+
+  puts Terminal::Table.new :headings => heading, :rows => rows
+end
+
+def generate_rankings(locality_id)
+  ranking_geral = Api.get_ranking_of_names_by(location_id: locality_id)
+  ranking_masc = Api.get_ranking_of_names_by(location_id: locality_id, gender: 'M')
+  ranking_fem = Api.get_ranking_of_names_by(location_id: locality_id, gender: 'F')
+
+  heading = ['Ranking Geral', 'Ranking Masculino', 'Ranking Feminino']
+  rows = Array.new(ranking_geral[:res].length) {[]}
+
+  ranking_geral[:res].each_with_index {|item, index| 
+    rows[index] << "#{item[:ranking]} - #{item[:nome]}"
+  }
+ 
+  ranking_masc[:res].each_with_index {|item, index| 
+    rows[index] << "#{item[:ranking]} - #{item[:nome]}"
+  }
+  
+  ranking_fem[:res].each_with_index {|item, index| 
+    rows[index] << "#{item[:ranking]} - #{item[:nome]}"
+  }
+  
+  puts Terminal::Table.new :headings => heading, :rows => rows
 end
 
 def welcome()
@@ -48,20 +86,22 @@ end
 
 #Interface
 welcome()
-opcao = menu()
+option = menu()
 
-while opcao != 4
-  if opcao == 1
+while option != 4
+  if option == 1
     initials = choose_a_state
     state_id = Api.convert_initials_state_to_id(initials)
     generate_rankings(state_id)
-  elsif opcao == 2
-
-  elsif opcao == 3
-
+  elsif option == 2
+    city_id = choose_a_city
+    generate_rankings(city_id)
+  elsif option == 3
+    names = choose_names
+    generate_name_frequency_table(names)
   else
     puts 'Opção inválida'
   end
 
-  menu()
+  option = menu()
 end

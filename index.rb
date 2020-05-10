@@ -1,5 +1,5 @@
-require 'json'
-require_relative 'api'
+require_relative 'ibgeApi'
+require_relative 'ibgeDB'
 require 'terminal-table'
 
 def choose_names
@@ -10,11 +10,10 @@ end
 def choose_a_city
   print 'Digite corretamente o nome da cidade desejada: '
   city_name = gets().chomp
-  Api.convert_name_city_to_id(city_name)
 end
 
 def choose_a_state
-  states = Api.get_states_from_brazil
+  states = IbgeDB::Estado.all
   rows = Array.new(states.length) {[]}
   states.each_with_index {|state, index| 
     rows[index] << state[:nome]
@@ -26,7 +25,7 @@ def choose_a_state
 end
 
 def generate_name_frequency_table(names)
-  name_frequency = Api.get_name_frequency(names)
+  name_frequency = IbgeApi.get_name_frequency(names)
 
   heading = ['Década']
   rows = Array.new(name_frequency[0][:res].length) {[]}
@@ -44,10 +43,10 @@ def generate_name_frequency_table(names)
   puts Terminal::Table.new :headings => heading, :rows => rows
 end
 
-def generate_rankings(locality_id)
-  ranking_geral = Api.get_ranking_of_names_by(location_id: locality_id)
-  ranking_masc = Api.get_ranking_of_names_by(location_id: locality_id, gender: 'M')
-  ranking_fem = Api.get_ranking_of_names_by(location_id: locality_id, gender: 'F')
+def generate_rankings(location_id:)
+  ranking_geral = IbgeApi.get_ranking_of_names_by(location_id: location_id)
+  ranking_masc = IbgeApi.get_ranking_of_names_by(location_id: location_id, gender: 'M')
+  ranking_fem = IbgeApi.get_ranking_of_names_by(location_id: location_id, gender: 'F')
 
   heading = ['Ranking Geral', 'Ranking Masculino', 'Ranking Feminino']
   rows = Array.new(ranking_geral[:res].length) {[]}
@@ -67,11 +66,6 @@ def generate_rankings(locality_id)
   puts Terminal::Table.new :headings => heading, :rows => rows
 end
 
-def welcome()
-  puts 'BEM VINDO AO SISTEMA DE NOMES DO IBGE!!!'
-  puts ''
-end
-
 def menu
   puts 'MENU:'
   puts ''
@@ -84,24 +78,32 @@ def menu
   gets().to_i()
 end
 
-#Interface
-welcome()
-option = menu()
-
-while option != 4
-  if option == 1
-    initials = choose_a_state
-    state_id = Api.convert_initials_state_to_id(initials)
-    generate_rankings(state_id)
-  elsif option == 2
-    city_id = choose_a_city
-    generate_rankings(city_id)
-  elsif option == 3
-    names = choose_names
-    generate_name_frequency_table(names)
-  else
-    puts 'Opção inválida'
-  end
-
-  option = menu()
+def welcome
+  puts 'BEM VINDO AO SISTEMA DE NOMES DO IBGE!!!'
 end
+
+def startApplication
+  welcome
+  option = menu
+
+  while option != 4
+    if option == 1
+      state_initials = choose_a_state
+      result = IbgeDB::Estado.find_by_sql("SELECT id FROM estados WHERE sigla = \"#{state_initials.upcase}\"")
+      generate_rankings(location_id: result[0][:id])
+    elsif option == 2
+      city_name = choose_a_city
+      result = IbgeDB::Cidade.find_by_sql("SELECT id FROM cidades WHERE nome = \"#{city_name}\"")
+      generate_rankings(location_id: result[0][:id])
+    elsif option == 3
+      names = choose_names
+      generate_name_frequency_table(names)
+    else
+      puts 'Opção inválida'
+    end
+
+    option = menu()
+  end
+end
+
+startApplication

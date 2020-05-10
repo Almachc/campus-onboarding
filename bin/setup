@@ -1,0 +1,42 @@
+#!/usr/bin/env ruby
+
+system('bundle install')
+
+require 'sqlite3'
+require_relative '../ibgeApi'
+
+db = SQLite3::Database.open "ibge.db"
+
+db.execute <<-SQL
+  create table if not exists estados (
+    id integer,
+    nome varchar(20),
+    sigla varchar(2)
+  );
+SQL
+
+db.execute <<-SQL
+  create table if not exists cidades (
+    id integer,
+    nome varchar(20)
+  );
+SQL
+
+states = IbgeApi.get_states_from_brazil
+cities = IbgeApi.get_cities_from_brazil
+
+queryStates = "INSERT INTO estados (id, nome, sigla) VALUES "
+queryCities = "INSERT INTO cidades (id, nome) VALUES "
+
+states.each {|state|
+  queryStates += "(#{state[:id]}, \"#{state[:nome]}\", \"#{state[:sigla]}\"),"
+}
+
+cities.each {|city|
+  queryCities += "(#{city[:id]}, \"#{city[:nome]}\"),"
+}
+
+db.execute(queryStates.sub(/\,$/, ';'))
+db.execute(queryCities.sub(/\,$/, ';'))
+
+db.close

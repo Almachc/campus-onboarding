@@ -1,5 +1,5 @@
-require_relative 'ibgeApi'
-require_relative 'ibgeDB'
+require_relative 'lib/ibgeApi'
+require_relative 'lib/ibgeDB'
 require 'terminal-table'
 require 'csv'
 
@@ -39,18 +39,24 @@ def choose_state
 end
 
 def generate_name_frequency_list(names)
-  name_frequency = IbgeApi.get_name_frequency(names)
+  test_record = IbgeApi.get_name_frequency('Maria')[0][:res]
+  valid_decades = test_record.map {|item|
+    item[:periodo]
+  }
 
   heading = ['Década']
-  rows = Array.new(name_frequency[0][:res].length) {[]}
+  rows = valid_decades.map {|item, index|
+    [item.delete('[')]
+  }
 
-  name_frequency.each_with_index {|item1, index1|
-    heading << item1[:nome]
-    item1[:res].each_with_index {|item2, index2|
-      if index1 == 0
-        rows[index2] << item2[:periodo].delete('[')
-      end
-      rows[index2] << item2[:frequencia]
+  IbgeApi.get_name_frequency(names).each_with_index {|itemName, indexName|
+    heading << itemName[:nome]
+    valid_decades.each_with_index {|decade, indexVD|
+      frequency = '--'
+      itemName[:res].each_with_index {|itemDecade, indexDecade|
+        frequency = itemDecade[:frequencia] if itemDecade[:periodo].eql? decade
+      }
+      rows[indexVD] << frequency
     }
   }
 
@@ -75,7 +81,9 @@ def mount_tables(rankings)
     Terminal::Table.new :title => ranking[:title], :headings => heading, :rows => rows
   }
   
-  puts Terminal::Table.new :rows => [ranking_tables]
+  puts Terminal::Table.new :rows => [ranking_tables], :style => {:border_x => '', :border_y => '',
+                                                                 :border_top => false,
+                                                                 :border_bottom => false}
 end
 
 def generate_name_popularity_ranking(location_id: '')
@@ -88,8 +96,8 @@ def generate_name_popularity_ranking(location_id: '')
 end
 
 def menu
-  puts 'MENU:'
   puts ''
+  puts 'MENU:'
   puts '[1] Ranking dos nomes mais comuns em uma determinada Unidade Federativa (UF)'
   puts '[2] Ranking dos nomes mais comuns em uma determinada cidade'
   puts '[3] Frequência do uso de um nome ao longo dos anos'

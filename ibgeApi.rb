@@ -18,7 +18,7 @@ class IbgeApi
     JSON.parse(response.body, symbolize_names: true)
   end
 
-  def self.get_ranking_of_names_by(location_id: '', gender: '')
+  def self.get_most_frequent_names(location_id: '', gender: '')
     query_string = ''
     
     if !location_id.to_s.empty?

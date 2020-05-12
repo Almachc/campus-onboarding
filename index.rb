@@ -3,17 +3,29 @@ require_relative 'ibgeDB'
 require 'terminal-table'
 require 'csv'
 
+def total_population?(location_id:)
+  populacao = nil
+  CSV.foreach("assets/populacao_2019.csv", headers: true) do |row|
+    if row["Cód."].to_i == location_id
+      populacao = row["População Residente - 2019"] 
+      break
+    end
+  end
+  populacao.to_i
+end
+
 def choose_names
   print 'Digite um ou mais nomes, separados por vírgula, a serem pesquisados: '
   gets().chomp
 end
 
-def choose_a_city
+def choose_city
   print 'Digite corretamente o nome da cidade desejada: '
   city_name = gets().chomp
+  IbgeDB::Cidade.find_by_sql("SELECT id FROM cidades WHERE nome = \"#{city_name}\"")[0][:id]
 end
 
-def choose_a_state
+def choose_state
   states = IbgeDB::Estado.all
   rows = Array.new(states.length) {[]}
   states.each_with_index {|state, index| 
@@ -22,10 +34,11 @@ def choose_a_state
   }
   puts Terminal::Table.new :title => 'Estados', :headings => ['Nome', 'Sigla'], :rows => rows
   print 'Digite a sigla correspondente ao estado desejado: '
-  gets().chomp
+  state_initials = gets().chomp.upcase
+  IbgeDB::Estado.find_by_sql("SELECT id FROM estados WHERE sigla = \"#{state_initials}\"")[0][:id]
 end
 
-def generate_name_frequency_table(names)
+def generate_name_frequency_list(names)
   name_frequency = IbgeApi.get_name_frequency(names)
 
   heading = ['Década']
@@ -44,26 +57,34 @@ def generate_name_frequency_table(names)
   puts Terminal::Table.new :headings => heading, :rows => rows
 end
 
-def generate_ranking(location_id: '', gender: '')
-  title = 'Ranking Geral'
-  title = gender == 'M' ? 'Ranking Masculino' : 'Ranking Feminino' if !gender.empty?
+def mount_tables(rankings)
+  ranking_tables = rankings.map {|ranking|
+    heading = ['Posição', 'Nome', 'Frequência', 'Porcentagem']
+    rows = Array.new(ranking[:data][:res].length) {[]}
   
-  ranking = IbgeApi.get_ranking_of_names_by(location_id: location_id, gender: gender)
-
-  heading = ['Pos', 'Nome', 'Frequência', 'Porcentagem']
-  rows = Array.new(ranking[:res].length) {[]}
-
-  populacao = teste(location_id: location_id)
-
-  ranking[:res].each_with_index {|item, index| 
-    porcentagem = (item[:frequencia] * 100) / populacao.to_f
-    rows[index] << item[:ranking]
-    rows[index] << item[:nome]
-    rows[index] << item[:frequencia]
-    rows[index] << "#{porcentagem.round(2)}%"
+    amount = total_population?(location_id: ranking[:data][:localidade].to_i)
+  
+    ranking[:data][:res].each_with_index {|item, index| 
+      porcentagem = (item[:frequencia] * 100) / amount.to_f
+      rows[index] << item[:ranking]
+      rows[index] << item[:nome]
+      rows[index] << item[:frequencia]
+      rows[index] << "#{porcentagem.round(2)}%"
+    }
+   
+    Terminal::Table.new :title => ranking[:title], :headings => heading, :rows => rows
   }
- 
-  Terminal::Table.new :title => title, :headings => heading, :rows => rows
+  
+  puts Terminal::Table.new :rows => [ranking_tables]
+end
+
+def generate_name_popularity_ranking(location_id: '')
+  all = IbgeApi.get_most_frequent_names(location_id: location_id)
+  masc = IbgeApi.get_most_frequent_names(location_id: location_id, gender: "M")
+  fem = IbgeApi.get_most_frequent_names(location_id: location_id, gender: "F")
+
+  mount_tables([{data: all, title: 'Ranking Geral'}, {data: masc, title: 'Ranking Masculino'},
+                {data: fem, title: 'Ranking Feminino'}])
 end
 
 def menu
@@ -82,36 +103,20 @@ def welcome
   puts 'BEM VINDO AO SISTEMA DE NOMES DO IBGE!!!'
 end
 
-def teste(location_id:)
-  populacao = nil
-  CSV.foreach("assets/populacao_2019.csv", headers: true) do |row|
-    if row["Cód."].to_i == location_id
-      populacao = row["População Residente - 2019"] 
-      break
-    end
-  end
-  populacao.to_i
-end
-
 def startApplication
   welcome
   option = menu
 
   while option != 4
     if option == 1
-      state_initials = choose_a_state
-      result = IbgeDB::Estado.find_by_sql("SELECT id FROM estados WHERE sigla = \"#{state_initials.upcase}\"")
-      geral = generate_ranking(location_id: result[0][:id])
-      masc = generate_ranking(location_id: result[0][:id], gender: "M")
-      fem = generate_ranking(location_id: result[0][:id], gender: "F")
-      puts Terminal::Table.new :rows => [[geral, masc, fem]]
+      state_id = choose_state
+      generate_name_popularity_ranking(location_id: state_id)
     elsif option == 2
-      city_name = choose_a_city
-      result = IbgeDB::Cidade.find_by_sql("SELECT id FROM cidades WHERE nome = \"#{city_name}\"")
-      generate_rankings(location_id: result[0][:id])
+      city_id = choose_city
+      generate_name_popularity_ranking(location_id: city_id)
     elsif option == 3
       names = choose_names
-      generate_name_frequency_table(names)
+      generate_name_frequency_list(names)
     else
       puts 'Opção inválida'
     end
